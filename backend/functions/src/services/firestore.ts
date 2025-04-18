@@ -14,10 +14,24 @@ const getDb = () => {
 // User Operations
 export const createUser = async (
   userId: string,
-  userData: Omit<User, 'createdAt' | 'updatedAt'>
+  userData: Omit<User, 'createdAt' | 'updatedAt'> & { role: 'creator' | 'contributor' }
 ): Promise<UserDocument> => {
   const db = getDb();
   const timestamp = admin.firestore.FieldValue.serverTimestamp();
+
+  // Check if the email is already associated with a different role
+  const existingUserSnapshot = await db.collection('users')
+    .where('email', '==', userData.email)
+    .limit(1)
+    .get();
+
+  if (!existingUserSnapshot.empty) {
+    const existingUser = existingUserSnapshot.docs[0].data();
+    if (existingUser.role !== userData.role) {
+      throw new Error('Email is already associated with a different role');
+    }
+  }
+
   const user = {
     ...userData,
     createdAt: timestamp,
@@ -52,6 +66,7 @@ export const getUser = async (userId: string): Promise<UserDocument | null> => {
 
 // Bounty Operations
 export interface Bounty {
+  payment: any;
   prUrl: string;
   id: string;
   title: string;

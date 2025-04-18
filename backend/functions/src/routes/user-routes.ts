@@ -1,6 +1,7 @@
 import * as express from 'express';
 import * as admin from 'firebase-admin';
 import { validateFirebaseIdToken, AuthenticatedRequest } from '../middleware/auth';
+import { processBountyPayment } from '../services/payment-service';
 
 const router = express.Router();
 
@@ -354,6 +355,110 @@ async function fetchFromGitHub(endpoint: string, token?: string): Promise<any> {
   const data = await response.json();
   return { data, headers: response.headers };
 }
+
+// Fetch submissions for a specific bounty
+router.get('/creator/bounties', async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = req.user!.uid;
+    const db = admin.firestore();
+
+    // Get bounties created by the user
+    const bountiesSnapshot = await db.collection('bounties')
+      .where('createdBy', '==', userId)
+      .get();
+
+    if (bountiesSnapshot.empty) {
+      return res.json({ success: true, bounties: [] });
+    }
+
+    // Process bounties and include submission data
+    const bounties = await Promise.all(bountiesSnapshot.docs.map(async (doc) => {
+      const bounty = { id: doc.id, ...doc.data() };
+
+      // Get submissions for each bounty
+      const submissionsSnapshot = await db.collection('submissions')
+        .where('bountyId', '==', doc.id)
+        .get();
+
+      const submissions = submissionsSnapshot.docs.map(subDoc => ({ id: subDoc.id, ...subDoc.data() }));
+      return { ...bounty, submissions };
+    }));
+
+    res.json({ success: true, bounties });
+  } catch (error) {
+    console.error('Error fetching bounties:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch bounties' });
+  }
+});
+
+// Approve a submission and release bounty reward
+router.post('/submissions/:id/approve', async (req: AuthenticatedRequest, res) => {
+  try {
+    const submissionId = req.params.id;
+    const db = admin.firestore();
+
+    // Get the submission
+    const submissionDoc = await db.collection('submissions').doc(submissionId).get();
+    if (!submissionDoc.exists) {
+      return res.status(404).json({ success: false, error: 'Submission not found' });
+    }
+    const submission = submissionDoc.data();
+    if (!submission) {
+      return res.status(404).json({ success: false, error: 'Submission data is empty' });
+    }
+
+    // Get the bounty
+    const bountyDoc = await db.collection('bounties').doc(submission.bountyId).get();
+    if (!bountyDoc.exists) {
+      return res.status(404).json({ success: false, error: 'Bounty not found' });
+    }
+    const bounty = bountyDoc.data();
+    if (!bounty) {
+      return res.status(404).json({ success: false, error: 'Bounty data is empty' });
+    }
+
+    // Check if the bounty has already been paid
+    if (bounty.payment && bounty.payment.status === 'completed') {
+      return res.json({ success: true, message: 'Bounty has already been paid' });
+    }
+
+    // Process payment using Solana service
+    const paymentResult = await processBountyPayment(bounty.id, submissionId, submission.userId);
+    if (!paymentResult.success) {
+      throw new Error(paymentResult.message);
+    }
+
+    // Update submission status to approved
+    await db.collection('submissions').doc(submissionId).update({
+      status: 'approved',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({ success: true, message: 'Submission approved and bounty paid', signature: paymentResult.signature });
+  } catch (error) {
+    console.error('Error approving submission:', error);
+    res.status(500).json({ success: false, error: 'Failed to approve submission' });
+  }
+});
+
+// Reject a submission
+router.post('/submissions/:id/reject', async (req: AuthenticatedRequest, res) => {
+  try {
+    const submissionId = req.params.id;
+    const db = admin.firestore();
+
+    // Update submission status to rejected
+    await db.collection('submissions').doc(submissionId).update({
+      status: 'rejected',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({ success: true, message: 'Submission rejected' });
+  } catch (error) {
+    console.error('Error rejecting submission:', error);
+    res.status(500).json({ success: false, error: 'Failed to reject submission' });
+  }
+});
 
 // Note: The getUserSubmissions cloud function has been moved to a separate file
 // to avoid TypeScript typing issues. Import it from '../cloud-functions/user-functions'

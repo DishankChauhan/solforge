@@ -1,6 +1,7 @@
 import { DocumentData, Timestamp } from 'firebase-admin/firestore';
 
 export interface User {
+  email: string;
   githubUsername: string;
   githubAvatar: string;
   walletAddress: string;

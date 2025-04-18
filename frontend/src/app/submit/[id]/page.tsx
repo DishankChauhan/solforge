@@ -8,7 +8,7 @@ import { getBountyById, submitBountyWork } from '@/lib/firebase';
 import { IBounty } from '@/types/bounty';
 
 export default function SubmitWorkPage() {
-  const { id } = useParams();
+  const { id } = useParams() ?? { id: '' };
   const router = useRouter();
   const { user } = useAuth();
   const { connected } = useWallet();

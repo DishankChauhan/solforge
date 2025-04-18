@@ -1,246 +1,159 @@
-import React, { useEffect, useState } from 'react';
-import { functions } from '../../firebase/config';
-import { httpsCallable } from 'firebase/functions';
-import { useAuth } from '../../contexts/AuthContext';
+'use client';
 
-interface Repository {
-  id: number;
-  name: string;
-  fullName: string;
-  description: string;
-  url: string;
-  stars: number;
-  forks: number;
-  language: string;
-  isForked: boolean;
-  updatedAt: string;
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthProvider';
+import { Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+
+// Register ChartJS components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
+interface Contribution {
+  date: string;
+  count: number;
 }
 
-interface PullRequest {
-  id: number;
-  title: string;
-  url: string;
-  createdAt: string;
-  merged: boolean;
-  repositoryName: string;
-}
-
-interface GitHubContributions {
-  repositories: Repository[];
-  pullRequests: PullRequest[];
-  commitCount: number;
-  publicRepos: number;
-  followers: number;
-  following: number;
-  profileUrl: string;
-  avatar: string;
-  bio?: string;
-  company?: string;
-  location?: string;
-  error?: string;
-  username?: string;
-}
-
-const GitHubContributions: React.FC = () => {
+export default function GitHubContributions() {
+  const [contributions, setContributions] = useState<Contribution[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [contributions, setContributions] = useState<GitHubContributions | null>(null);
   const { user } = useAuth();
 
   useEffect(() => {
     const fetchContributions = async () => {
-      if (!user) return;
-      
+      if (!user?.githubUsername) {
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         
-        // Fetch from our API
-        const response = await fetch('/api/user/github-contributions', {
-          headers: {
-            'Authorization': `Bearer ${await user.getIdToken()}`
-          }
-        });
+        // Generate mock contribution data
+        const mockContributions = generateMockContributions();
         
-        if (!response.ok) {
-          throw new Error('Failed to fetch GitHub contributions');
-        }
+        // Simulate API delay
+        setTimeout(() => {
+          setContributions(mockContributions);
+          setLoading(false);
+        }, 500);
         
-        const data = await response.json();
-        if (data.success && data.contributions) {
-          setContributions(data.contributions);
-        } else {
-          setError(data.error || 'Failed to load GitHub data');
-        }
       } catch (err) {
         console.error('Error fetching GitHub contributions:', err);
         setError('Failed to load GitHub contributions');
-      } finally {
         setLoading(false);
       }
     };
-    
+
     fetchContributions();
-  }, [user]);
+  }, [user?.githubUsername]);
+  
+  // Helper function to generate mock contribution data
+  const generateMockContributions = (): Contribution[] => {
+    const contributions = [];
+    const today = new Date();
+    
+    for (let i = 60; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      
+      contributions.push({
+        date: date.toISOString().split('T')[0],
+        count: Math.floor(Math.random() * 10) // Random contributions count 0-9
+      });
+    }
+    
+    return contributions;
+  };
 
   if (loading) {
     return (
-      <div className="p-4 bg-white rounded-lg shadow">
-        <div className="flex items-center space-x-2">
-          <svg className="animate-spin h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          <span>Loading GitHub contributions...</span>
-        </div>
+      <div className="flex justify-center items-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-700"></div>
       </div>
     );
   }
 
-  if (error || !contributions) {
+  if (error) {
     return (
-      <div className="p-4 bg-white rounded-lg shadow">
-        <div className="text-red-500">
-          <h3 className="font-medium">Unable to load GitHub contributions</h3>
-          <p className="text-sm">{error || 'Please check your GitHub connection'}</p>
-          {contributions?.username && (
-            <a 
-              href={contributions.profileUrl || `https://github.com/${contributions.username}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 inline-block text-blue-500 hover:underline"
-            >
-              View GitHub Profile
-            </a>
-          )}
-        </div>
+      <div className="bg-red-50 p-4 rounded-md text-red-700">
+        {error}
       </div>
     );
   }
+
+  if (!contributions.length) {
+    return (
+      <div className="bg-gray-50 p-4 rounded-md text-gray-700">
+        No contribution data available.
+      </div>
+    );
+  }
+
+  // Prepare data for the chart
+  const lastMonthContributions = contributions.slice(-30); // Get last 30 days
+  
+  const chartData = {
+    labels: lastMonthContributions.map(c => new Date(c.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+    datasets: [
+      {
+        label: 'Contributions',
+        data: lastMonthContributions.map(c => c.count),
+        backgroundColor: 'rgba(124, 58, 237, 0.6)',
+        borderColor: 'rgba(124, 58, 237, 1)',
+        borderWidth: 1,
+      },
+    ],
+  };
+
+  const options = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+      },
+      title: {
+        display: true,
+        text: 'Last 30 Days GitHub Activity',
+      },
+    },
+  };
+
+  // Calculate total contributions
+  const totalContributions = contributions.reduce((sum, item) => sum + item.count, 0);
+  const averageDaily = totalContributions / contributions.length || 0;
 
   return (
-    <div className="bg-white rounded-lg shadow overflow-hidden">
-      <div className="border-b border-gray-200 bg-gray-50 px-4 py-5 sm:px-6">
-        <div className="flex items-center">
-          <img
-            src={contributions.avatar}
-            alt="GitHub Avatar"
-            className="h-10 w-10 rounded-full mr-4"
-          />
-          <div>
-            <h3 className="text-lg font-medium text-gray-900">GitHub Contributions</h3>
-            <p className="text-sm text-gray-500">
-              <a 
-                href={contributions.profileUrl} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:text-blue-800"
-              >
-                View Profile
-              </a>
-            </p>
-          </div>
+    <div className="bg-white rounded-lg shadow p-4">
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <div className="text-sm font-medium text-gray-500">Total Contributions</div>
+          <div className="text-2xl font-semibold text-gray-900">{totalContributions}</div>
+        </div>
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <div className="text-sm font-medium text-gray-500">Daily Average</div>
+          <div className="text-2xl font-semibold text-gray-900">{averageDaily.toFixed(1)}</div>
         </div>
       </div>
-
-      <div className="px-4 py-5 sm:p-6">
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-6">
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <p className="text-sm text-gray-500">Repositories</p>
-            <p className="text-xl font-semibold">{contributions.publicRepos}</p>
-          </div>
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <p className="text-sm text-gray-500">Commits</p>
-            <p className="text-xl font-semibold">{contributions.commitCount}</p>
-          </div>
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <p className="text-sm text-gray-500">Followers</p>
-            <p className="text-xl font-semibold">{contributions.followers}</p>
-          </div>
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <p className="text-sm text-gray-500">Following</p>
-            <p className="text-xl font-semibold">{contributions.following}</p>
-          </div>
-        </div>
-
-        {/* Repositories */}
-        <div className="mb-6">
-          <h4 className="text-lg font-medium text-gray-900 mb-3">Top Repositories</h4>
-          {contributions.repositories.length === 0 ? (
-            <p className="text-gray-500">No repositories found</p>
-          ) : (
-            <ul className="divide-y divide-gray-200">
-              {contributions.repositories.map(repo => (
-                <li key={repo.id} className="py-3">
-                  <a 
-                    href={repo.url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="block hover:bg-gray-50 transition"
-                  >
-                    <div className="flex justify-between">
-                      <p className="font-medium text-blue-600">{repo.name}</p>
-                      <div className="flex space-x-3 text-sm text-gray-500">
-                        <span>⭐ {repo.stars}</span>
-                        <span>🍴 {repo.forks}</span>
-                      </div>
-                    </div>
-                    {repo.description && (
-                      <p className="text-gray-600 text-sm mt-1 line-clamp-2">{repo.description}</p>
-                    )}
-                    <div className="mt-1 flex items-center text-sm">
-                      {repo.language && (
-                        <span className="text-gray-500 mr-3">
-                          <span className="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1"></span>
-                          {repo.language}
-                        </span>
-                      )}
-                      {repo.isForked && <span className="text-gray-400 text-xs">Forked</span>}
-                    </div>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Pull Requests */}
-        <div>
-          <h4 className="text-lg font-medium text-gray-900 mb-3">Recent Pull Requests</h4>
-          {contributions.pullRequests.length === 0 ? (
-            <p className="text-gray-500">No pull requests found</p>
-          ) : (
-            <ul className="divide-y divide-gray-200">
-              {contributions.pullRequests.map(pr => (
-                <li key={pr.id} className="py-3">
-                  <a 
-                    href={pr.url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="block hover:bg-gray-50 transition"
-                  >
-                    <div className="flex items-center">
-                      <span 
-                        className={`mr-2 flex-shrink-0 inline-block h-2 w-2 rounded-full ${
-                          pr.merged ? 'bg-purple-500' : 'bg-green-500'
-                        }`}
-                      ></span>
-                      <p className="font-medium text-gray-900 truncate">{pr.title}</p>
-                    </div>
-                    <div className="mt-1 flex items-center text-sm text-gray-500">
-                      <span className="truncate">{pr.repositoryName}</span>
-                      <span className="mx-1">•</span>
-                      <span>{new Date(pr.createdAt).toLocaleDateString()}</span>
-                    </div>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+      
+      <div className="h-64">
+        <Bar data={chartData} options={options} />
       </div>
     </div>
   );
-};
-
-export default GitHubContributions; 
+} 

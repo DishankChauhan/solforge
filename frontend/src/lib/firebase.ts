@@ -208,11 +208,29 @@ export async function submitBountyWork({
     throw new Error('Bounty is not open for submissions');
   }
 
+  // Create the submission document
+  const submissionCollection = collection(db, 'submissions');
+  const now = serverTimestamp();
+  
+  const submissionData = {
+    bountyId,
+    userId,
+    prUrl: prLink,
+    status: 'pending' as SubmissionStatus,
+    createdAt: now,
+    updatedAt: now,
+    reviewerId: null,
+    reviewerComments: null
+  };
+
+  await addDoc(submissionCollection, submissionData);
+
+  // Update the bounty status
   await updateDoc(bountyRef, {
     status: 'submitted',
     submittedBy: userId,
     prLink,
-    submittedAt: new Date().toISOString(),
+    submittedAt: serverTimestamp(),
   });
 }
 

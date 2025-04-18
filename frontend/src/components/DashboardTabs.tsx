@@ -5,25 +5,38 @@ import { useAuth } from '@/context/AuthProvider';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
-const tabs = [
-  { name: 'Available Bounties', href: '/dashboard/available-bounties' },
-  { name: 'My Submissions', href: '/dashboard/my-submissions' },
-  { name: 'My Bounties', href: '/dashboard/my-bounties', creatorOnly: true },
-  { name: 'Review Submissions', href: '/dashboard/review', creatorOnly: true },
-  { name: 'Profile', href: '/profile' },
-];
+const getTabs = (role: string) => {
+  const commonTabs = [
+    { name: 'Available Bounties', href: '/dashboard/available-bounties' },
+    { name: 'Profile', href: '/profile' },
+  ];
+
+  const creatorTabs = [
+    { name: 'Review Submissions', href: '/dashboard/review' },
+  ];
+
+  const contributorTabs = [
+    { name: 'My Submissions', href: '/dashboard/my-submissions' },
+    { name: 'My Bounties', href: '/dashboard/my-bounties' },
+  ];
+
+  return role === 'creator'
+    ? [...commonTabs, ...creatorTabs]
+    : [...commonTabs, ...contributorTabs];
+};
 
 export function DashboardTabs() {
   const pathname = usePathname();
   const { user } = useAuth();
-  const isCreator = user?.role === 'creator';
+
+  if (!user) return null;
+
+  const tabs = getTabs(user.role);
 
   return (
     <div className="border-b border-gray-200">
       <nav className="-mb-px flex space-x-8" aria-label="Tabs">
         {tabs.map((tab) => {
-          if (tab.creatorOnly && !isCreator) return null;
-          
           const isActive = pathname === tab.href;
           
           return (

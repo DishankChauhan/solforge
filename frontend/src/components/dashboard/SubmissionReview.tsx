@@ -21,9 +21,13 @@ export function SubmissionReview() {
     const fetchSubmissions = async () => {
       try {
         setLoading(true);
-        // Get submissions for bounties created by the current user
+        // Get all submissions for bounties that have at least one submission
         const fetchedSubmissions = await getSubmissions({ userId: user.uid });
-        setSubmissions(fetchedSubmissions);
+        // Filter submissions to only show those for bounties created by the current user
+        const filteredSubmissions = fetchedSubmissions.filter(
+          submission => submission.bounty?.creatorId === user.uid
+        );
+        setSubmissions(filteredSubmissions);
       } catch (err) {
         setError('Failed to fetch submissions');
         console.error(err);

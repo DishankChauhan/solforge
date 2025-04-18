@@ -14,6 +14,7 @@ export default function SignUpPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { signUpWithEmail, signInWithGoogle, signInWithGithub } = useAuth();
+  const [role, setRole] = useState('contributor');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +28,7 @@ export default function SignUpPage() {
     setLoading(true);
 
     try {
-      await signUpWithEmail(email, password);
+      await signUpWithEmail(email, password, role);
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Failed to create account');
@@ -67,6 +68,21 @@ export default function SignUpPage() {
 
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
+              <label htmlFor="role" className="sr-only">Role</label>
+              <select
+                id="role"
+                name="role"
+                required
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-purple-500 focus:border-purple-500 focus:z-10 sm:text-sm"
+              >
+                <option value="">Select Role</option>
+                <option value="creator">Creator</option>
+                <option value="contributor">Contributor</option>
+              </select>
+            </div>
+            <div>
               <label htmlFor="email" className="sr-only">Email address</label>
               <input
                 id="email"
@@ -76,7 +92,7 @@ export default function SignUpPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-purple-500 focus:border-purple-500 focus:z-10 sm:text-sm"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-purple-500 focus:border-purple-500 focus:z-10 sm:text-sm"
                 placeholder="Email address"
               />
             </div>

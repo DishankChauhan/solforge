@@ -32,7 +32,7 @@ interface AuthContextType {
   user: IUser | null;
   loading: boolean;
   signInWithEmail: (email: string, password: string) => Promise<void>;
-  signUpWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string, role: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signInWithGithub: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -183,13 +183,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   // Sign up with email/password
-  const signUpWithEmail = async (email: string, password: string) => {
+  const signUpWithEmail = async (email: string, password: string, role: string) => {
     setLoading(true);
     try {
       console.log('Signing up with email:', email);
       const { createUserWithEmailAndPassword } = await import('firebase/auth');
       const result = await createUserWithEmailAndPassword(auth, email, password);
       console.log('Email sign-up successful:', result.user.uid);
+
+      // Save user data with role in Firestore
+      const db = getFirebaseFirestore();
+      const userRef = doc(db, 'users', result.user.uid);
+      await setDoc(userRef, {
+        uid: result.user.uid,
+        email: result.user.email,
+        role: role, // Save the selected role
+        createdAt: new Date().toISOString(),
+        lastLogin: serverTimestamp(),
+      });
+
       // Manually refresh to trigger immediate user data fetch
       forceRefresh();
       // Manually redirect to dashboard

@@ -3,8 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthProvider';
 import { IBounty, BountyStatus } from '@/types/bounty';
-import { getBounties, updateBountyStatus } from '@/lib/firebase';
+import { updateBountyStatus } from '@/lib/firebase';
 import { BountyCard } from '@/components/bounty/BountyCard';
+import { collection, query, where, onSnapshot, Firestore } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 type BountyFilter = 'all' | 'open' | 'in_progress' | 'completed' | 'cancelled';
 type SortOption = 'newest' | 'oldest' | 'amount_high' | 'amount_low';
@@ -18,26 +20,31 @@ export function CreatorBountyManager() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user?.uid) {
-      fetchBounties();
-    }
-  }, [user]);
+    if (!user?.uid) return;
 
-  const fetchBounties = async () => {
-    if (!user) return;
-    
-    try {
-      setLoading(true);
-      const userBounties = await getBounties();
-      // Filter just the bounties created by this user
-      setBounties(userBounties.filter(b => b.creatorId === user.uid));
-    } catch (error) {
-      console.error('Error fetching bounties:', error);
-      setError('Failed to load your bounties');
-    } finally {
-      setLoading(false);
-    }
-  };
+    setLoading(true);
+    const bountiesRef = collection(db as Firestore, 'bounties');
+    const q = query(bountiesRef, where('creatorId', '==', user.uid));
+
+    const unsubscribe = onSnapshot(q, 
+      (snapshot) => {
+        const updatedBounties = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as IBounty[];
+        setBounties(updatedBounties);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Error fetching bounties:', error);
+        setError('Failed to load your bounties');
+        setLoading(false);
+      }
+    );
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, [user]);
 
   // Filter and sort bounties
   const filteredBounties = bounties

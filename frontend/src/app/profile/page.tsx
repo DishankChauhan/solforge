@@ -10,6 +10,8 @@ import Link from 'next/link';
 import { updateUserProfile } from '@/lib/firebase';
 import { UserRole } from '@/types/user';
 import { toast } from 'react-hot-toast';
+import GitHubContributions from '@/components/profile/GitHubContributions';
+import UserBadges from '@/components/profile/UserBadges';
 
 export default function ProfilePage() {
   const { user, loading } = useAuth();
@@ -350,6 +352,22 @@ export default function ProfilePage() {
                     </div>
                   </dl>
                 </div>
+                
+                {/* User Badges Section */}
+                {user.githubUsername && (
+                  <div className="mt-8">
+                    <h3 className="text-lg font-medium text-gray-900 mb-4">Achievement Badges</h3>
+                    <UserBadges />
+                  </div>
+                )}
+                
+                {/* GitHub Contributions Section */}
+                {user.githubUsername && (
+                  <div className="mt-8">
+                    <h3 className="text-lg font-medium text-gray-900 mb-4">GitHub Contributions</h3>
+                    <GitHubContributions />
+                  </div>
+                )}
               </div>
             )}
           </div>

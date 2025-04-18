@@ -1,14 +1,18 @@
 'use client';
 
-import { useAuth } from '@/hooks/useUser';
+import { useAuth } from '@/context/AuthProvider';
 
-export function GitHubLoginButton() {
+interface GitHubLoginButtonProps {
+  className?: string;
+}
+
+export function GitHubLoginButton({ className = '' }: GitHubLoginButtonProps) {
   const { signInWithGithub } = useAuth();
 
   return (
     <button
       onClick={() => signInWithGithub()}
-      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gray-800 hover:bg-gray-700"
+      className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gray-800 hover:bg-gray-700 ${className}`}
     >
       <svg
         className="h-5 w-5 mr-2"

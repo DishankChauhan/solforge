@@ -6,12 +6,20 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthProvider';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { IBountySubmission, SubmissionStatus } from '@/types/submission';
-import { getSubmissions } from '@/lib/firebase';
-import { Timestamp } from 'firebase/firestore';
+import { getFirebaseFirestore } from '@/lib/firebase';
+import { collection, query, where, onSnapshot, Timestamp, orderBy, getDocs } from 'firebase/firestore';
+
+const formatDate = (timestamp: any) => {
+  if (timestamp instanceof Timestamp) {
+    return new Date(timestamp.seconds * 1000).toLocaleDateString();
+  }
+  return new Date(timestamp).toLocaleDateString();
+};
 
 export default function MySubmissionsPage() {
   const [submissions, setSubmissions] = useState<IBountySubmission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
   const router = useRouter();
   const wallet = useWallet();
@@ -22,27 +30,81 @@ export default function MySubmissionsPage() {
       return;
     }
 
-    async function fetchSubmissions() {
+    // Set up real-time listener for submissions
+    const db = getFirebaseFirestore();
+    const submissionsRef = collection(db, 'submissions');
+    
+    // Create a query that checks for both userId and submitterId fields
+    const q = query(
+      submissionsRef,
+      where('userId', '==', user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       try {
-        const userSubmissions = await getSubmissions({ userId: user?.uid });
-        setSubmissions(userSubmissions || []);
-      } catch (error) {
-        console.error('Error fetching submissions:', error);
-        setSubmissions([]);
+        const submissionsData: IBountySubmission[] = [];
+        
+        // First check submissions with userId
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          submissionsData.push({ 
+            id: doc.id,
+            ...data,
+            createdAt: data.createdAt instanceof Timestamp ? data.createdAt : new Timestamp(data.createdAt.seconds, data.createdAt.nanoseconds)
+          } as IBountySubmission);
+        });
+
+        // If no submissions found with userId, try submitterId
+        if (submissionsData.length === 0) {
+          const submitterQuery = query(
+            submissionsRef,
+            where('submitterId', '==', user.uid)
+          );
+          const submitterSnapshot = await getDocs(submitterQuery);
+          
+          submitterSnapshot.forEach((doc) => {
+            const data = doc.data();
+            submissionsData.push({ 
+              id: doc.id,
+              ...data,
+              createdAt: data.createdAt instanceof Timestamp ? data.createdAt : new Timestamp(data.createdAt.seconds, data.createdAt.nanoseconds)
+            } as IBountySubmission);
+          });
+        }
+
+        console.log('Fetched submissions:', submissionsData);
+        setSubmissions(submissionsData);
+        setError(null);
+      } catch (err) {
+        console.error('Error processing submissions:', err);
+        setError('Error loading submissions');
       } finally {
         setLoading(false);
       }
-    }
+    }, (error) => {
+      console.error('Error fetching submissions:', error);
+      setError('Failed to load submissions');
+      setLoading(false);
+    });
 
-    if (user?.uid) {
-      fetchSubmissions();
-    }
+    // Cleanup subscription
+    return () => unsubscribe();
   }, [user, router]);
 
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
+          {error}
+        </div>
       </div>
     );
   }
@@ -81,9 +143,7 @@ export default function MySubmissionsPage() {
                     </Link>
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    Submitted {submission.createdAt instanceof Timestamp 
-                      ? new Date(submission.createdAt.seconds * 1000).toLocaleDateString()
-                      : new Date(submission.createdAt).toLocaleDateString()}
+                    Submitted {formatDate(submission.createdAt)}
                   </p>
                 </div>
                 <span
